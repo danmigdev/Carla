@@ -150,6 +150,21 @@ public:
         return fLastPlayPosition;
     }
 
+    uint64_t getTotalResampledFrames() const noexcept
+    {
+        return fTotalResampledFrames;
+    }
+
+    uint32_t getNumPoolFrames() const noexcept
+    {
+        return fInitialMemoryPool.numFrames;
+    }
+
+    bool isEntireFileLoaded() const noexcept
+    {
+        return fEntireFileLoaded;
+    }
+
     float getReadableBufferFill() const noexcept
     {
         if (fFileNfo.channels == 0)
@@ -294,7 +309,6 @@ public:
     {
         float* outL = buffers[0] + bufferOffset;
         float* outR = buffers[1] + bufferOffset;
-        float* playCV = buffers[2] + bufferOffset;
 
         if (loopingMode && framePos >= fTotalResampledFrames)
             framePos %= fTotalResampledFrames;
@@ -303,7 +317,6 @@ public:
         {
             carla_zeroFloats(outL, frames);
             carla_zeroFloats(outR, frames);
-            carla_zeroFloats(playCV, frames);
             fLastPlayPosition = 1.f;
             return false;
         }
@@ -319,7 +332,6 @@ public:
             {
                 carla_zeroFloats(outL, frames);
                 carla_zeroFloats(outR, frames);
-                carla_zeroFloats(playCV, frames);
                 return false;
             }
 
@@ -329,11 +341,9 @@ public:
 
                 carla_copyFloats(outL, fInitialMemoryPool.buffer[0] + framePos, usableFrames);
                 carla_copyFloats(outR, fInitialMemoryPool.buffer[1] + framePos, usableFrames);
-                carla_fillFloatsWithSingleValue(playCV, 10.f, usableFrames);
 
                 outL += usableFrames;
                 outR += usableFrames;
-                playCV += usableFrames;
                 bufferOffset += usableFrames;
                 framePos += usableFrames;
                 frames -= usableFrames;
@@ -382,7 +392,6 @@ public:
             {
                 carla_zeroFloats(outL, frames);
                 carla_zeroFloats(outR, frames);
-                carla_zeroFloats(playCV, frames);
 
                 // wait until the previous relocation is done
                 if (fNextFileReadPos == -1)
@@ -405,13 +414,11 @@ public:
         {
             carla_zeroFloats(outL, frames);
             carla_zeroFloats(outR, frames);
-            carla_zeroFloats(playCV, frames);
             return framePos < fTotalResampledFrames;
         }
 
         fRingBufferL.readCustomData(outL, usableFrames * sizeof(float));
         fRingBufferR.readCustomData(outR, usableFrames * sizeof(float));
-        carla_fillFloatsWithSingleValue(playCV, 10.f, usableFrames);
 
         fRingBufferFramePos += usableFrames;
         totalFramesAvailable -= usableFrames;
@@ -428,7 +435,6 @@ public:
 
             carla_zeroFloats(outL + usableFrames, frames - usableFrames);
             carla_zeroFloats(outR + usableFrames, frames - usableFrames);
-            carla_zeroFloats(playCV + usableFrames, frames - usableFrames);
         }
 
         return totalFramesAvailable <= fSampleRate * 2;

@@ -106,7 +106,9 @@ public:
         kParameterHostSync,
         kParameterVolume,
         kParameterEnabled,
+       #ifndef __MOD_DEVICES__
         kParameterQuadChannels,
+       #endif
         kParameterInfoChannels,
         kParameterInfoBitRate,
         kParameterInfoBitDepth,
@@ -114,6 +116,10 @@ public:
         kParameterInfoLength,
         kParameterInfoPosition,
         kParameterInfoPoolFill,
+        kParameterSeek,
+        kParameterLoopStart,
+        kParameterLoopEnd,
+        kParameterKeepLoopOnTrack,
         kParameterCount
     };
 
@@ -193,6 +199,7 @@ protected:
             param.ranges.max = 1.0f;
             param.designation = NATIVE_PARAMETER_DESIGNATION_ENABLED;
             break;
+       #ifndef __MOD_DEVICES__
         case kParameterQuadChannels:
             param.name  = "Quad Channels";
             param.hints = static_cast<NativeParameterHints>(NATIVE_PARAMETER_IS_AUTOMATABLE|
@@ -211,6 +218,43 @@ protected:
                 param.scalePointCount  = 3;
                 param.scalePoints      = scalePoints;
             }
+            break;
+       #endif
+        case kParameterSeek:
+            param.name  = "Seek";
+            param.hints = static_cast<NativeParameterHints>(NATIVE_PARAMETER_IS_AUTOMATABLE|
+                                                            NATIVE_PARAMETER_IS_ENABLED);
+            param.ranges.def = 0.0f;
+            param.ranges.min = 0.0f;
+            param.ranges.max = 100.0f;
+            param.unit = "%";
+            break;
+        case kParameterLoopStart:
+            param.name  = "Loop Start";
+            param.hints = static_cast<NativeParameterHints>(NATIVE_PARAMETER_IS_AUTOMATABLE|
+                                                            NATIVE_PARAMETER_IS_ENABLED);
+            param.ranges.def = 0.0f;
+            param.ranges.min = 0.0f;
+            param.ranges.max = 100.0f;
+            param.unit = "%";
+            break;
+        case kParameterLoopEnd:
+            param.name  = "Loop End";
+            param.hints = static_cast<NativeParameterHints>(NATIVE_PARAMETER_IS_AUTOMATABLE|
+                                                            NATIVE_PARAMETER_IS_ENABLED);
+            param.ranges.def = 100.0f;
+            param.ranges.min = 0.0f;
+            param.ranges.max = 100.0f;
+            param.unit = "%";
+            break;
+        case kParameterKeepLoopOnTrack:
+            param.name  = "Keep Loop On Track";
+            param.hints = static_cast<NativeParameterHints>(NATIVE_PARAMETER_IS_AUTOMATABLE|
+                                                            NATIVE_PARAMETER_IS_ENABLED|
+                                                            NATIVE_PARAMETER_IS_BOOLEAN);
+            param.ranges.def = 0.0f;
+            param.ranges.min = 0.0f;
+            param.ranges.max = 1.0f;
             break;
         case kParameterInfoChannels:
             param.name  = "Num Channels";
@@ -299,8 +343,18 @@ protected:
             return fHostSync ? 1.f : 0.f;
         case kParameterEnabled:
             return fEnabled ? 1.f : 0.f;
+       #ifndef __MOD_DEVICES__
         case kParameterQuadChannels:
             return fQuadMode;
+       #endif
+        case kParameterSeek:
+            return fSeekValue;
+        case kParameterLoopStart:
+            return fLoopStartValue;
+        case kParameterLoopEnd:
+            return fLoopEndValue;
+        case kParameterKeepLoopOnTrack:
+            return fKeepLoopOnTrack ? 1.f : 0.f;
         case kParameterVolume:
             return fVolume * 100.f;
         case kParameterInfoPosition:
@@ -336,6 +390,49 @@ protected:
             return;
         }
 
+        if (index == kParameterSeek)
+        {
+            float v = value;
+            if (v < 0.f)
+                v = 0.f;
+            else if (v > 100.f)
+                v = 100.f;
+            fSeekValue = v;
+
+            // seeking only applies when not synced to host transport
+            if (! fHostSync)
+            {
+                const uint64_t total = fReader.getTotalResampledFrames();
+                if (total != 0)
+                    fInternalTransportFrame = static_cast<uint32_t>((v / 100.f) * static_cast<float>(total));
+            }
+            return;
+        }
+
+        if (index == kParameterLoopStart || index == kParameterLoopEnd)
+        {
+            float v = value;
+            if (v < 0.f)
+                v = 0.f;
+            else if (v > 100.f)
+                v = 100.f;
+
+            if (index == kParameterLoopStart)
+                fLoopStartValue = v;
+            else
+                fLoopEndValue = v;
+
+            // moving either handle restarts playback from the left handle (loop start)
+            if (fLoopMode && ! fHostSync)
+            {
+                const uint64_t total = fReader.getTotalResampledFrames();
+                if (total != 0)
+                    fInternalTransportFrame = static_cast<uint32_t>(fLoopStartValue / 100.f * static_cast<float>(total));
+            }
+            return;
+        }
+
+       #ifndef __MOD_DEVICES__
         if (index == kParameterQuadChannels)
         {
             const int ivalue = static_cast<int>(value + 0.5f);
@@ -347,6 +444,7 @@ protected:
             hostRequestIdle();
             return;
         }
+       #endif
 
         const bool b = value > 0.5f;
 
@@ -355,6 +453,10 @@ protected:
         case kParameterLooping:
             if (fLoopMode != b)
                 fLoopMode = b;
+            break;
+        case kParameterKeepLoopOnTrack:
+            // GUI-side setting (the modgui resets the handles on track change); just stored here
+            fKeepLoopOnTrack = b;
             break;
         case kParameterHostSync:
             if (fHostSync != b)
@@ -366,7 +468,16 @@ protected:
         case kParameterEnabled:
             if (fEnabled != b)
             {
-                fInternalTransportFrame = 0;
+                // when (re)enabling with an A/B loop region set, start from the left handle
+                // (loop start) instead of the file start
+                uint32_t startFrame = 0;
+                if (b && fLoopMode && ! fHostSync)
+                {
+                    const uint64_t total = fReader.getTotalResampledFrames();
+                    if (total != 0)
+                        startFrame = static_cast<uint32_t>(fLoopStartValue / 100.f * static_cast<float>(total));
+                }
+                fInternalTransportFrame = startFrame;
                 fEnabled = b;
             }
             break;
@@ -409,14 +520,12 @@ protected:
     {
         float* const out1 = outBuffer[0];
         float* const out2 = outBuffer[1];
-        float* const playCV = outBuffer[2];
 
         if (! fDoProcess)
         {
             // carla_stderr("P: no process");
             carla_zeroFloats(out1, frames);
             carla_zeroFloats(out2, frames);
-            carla_zeroFloats(playCV, frames);
             fLastPosition = 0.f;
             fReadableBufferFill = 0.f;
             return;
@@ -445,14 +554,83 @@ protected:
         {
             carla_zeroFloats(out1, frames);
             carla_zeroFloats(out2, frames);
-            carla_zeroFloats(playCV, frames);
             return;
         }
 
         const bool offline = isOffline();
         bool needsIdleRequest = false;
 
-        if (fReader.tickFrames(outBuffer, 0, frames, framePos, fLoopMode, offline) && ! fPendingFileRead)
+        bool needFileRead = false;
+
+        const uint64_t total = fReader.getTotalResampledFrames();
+        // An entirely-loaded file can have a few resampled frames beyond what the memory pool
+        // actually holds (resampler tail). Never ask tickFrames to read past the pool: that path
+        // recurses while holding the pool lock and would deadlock (offline) / drop a buffer (RT).
+        const uint64_t playEnd = fReader.isEntireFileLoaded()
+                               ? std::min<uint64_t>(total, fReader.getNumPoolFrames())
+                               : total;
+
+        if (fHostSync || playEnd == 0)
+        {
+            // host-synced: the host owns the transport (region loop / seek do not apply)
+            if (fReader.tickFrames(outBuffer, 0, frames, framePos, fLoopMode, offline))
+                needFileRead = true;
+        }
+        else
+        {
+            // optional A/B loop region (percent of file), clamped to the playable range
+            uint64_t rStart = 0, rEnd = 0;
+            if (fLoopMode)
+            {
+                const uint64_t s = static_cast<uint64_t>(fLoopStartValue / 100.f * static_cast<float>(total));
+                uint64_t e = static_cast<uint64_t>(fLoopEndValue / 100.f * static_cast<float>(total));
+                if (e > playEnd)
+                    e = playEnd;
+                const uint64_t minLen = static_cast<uint64_t>(getSampleRate()) / 100 + 1; // ~10ms guard
+                if (s + minLen < e)
+                {
+                    rStart = s;
+                    rEnd = e;
+                }
+            }
+
+            uint32_t off = 0, remaining = frames;
+            uint64_t fp = framePos;
+
+            // fold the free-running transport head into the loop region
+            if (rEnd > rStart && fp >= rEnd)
+                fp = rStart + (fp - rStart) % (rEnd - rStart);
+
+            while (remaining != 0)
+            {
+                if (fp >= playEnd)
+                {
+                    // past the playable end and not looping -> play once, silence the rest
+                    carla_zeroFloats(out1 + off, remaining);
+                    carla_zeroFloats(out2 + off, remaining);
+                    break;
+                }
+
+                // never span the loop end (inside region) nor the playable end in one call,
+                // so tickFrames always reads within the pool and never needs to recurse
+                const uint64_t bound = (rEnd > rStart && fp < rEnd) ? rEnd : playEnd;
+                uint32_t chunk = remaining;
+                if (bound - fp < chunk)
+                    chunk = static_cast<uint32_t>(bound - fp);
+
+                if (fReader.tickFrames(outBuffer, off, chunk, fp, false, offline))
+                    needFileRead = true;
+
+                off += chunk;
+                remaining -= chunk;
+                fp += chunk;
+
+                if (rEnd > rStart && fp >= rEnd)
+                    fp = rStart;
+            }
+        }
+
+        if (needFileRead && ! fPendingFileRead)
         {
             if (offline)
             {
@@ -675,6 +853,10 @@ private:
 
     uint32_t fInternalTransportFrame = 0;
     float fLastPosition = 0.f;
+    float fSeekValue = 0.f;
+    float fLoopStartValue = 0.f;
+    float fLoopEndValue = 100.f;
+    bool fKeepLoopOnTrack = false;
     float fReadableBufferFill = 0.f;
     float fVolume = 1.f;
 
@@ -728,7 +910,20 @@ private:
         if (fReader.loadFilename(filename, static_cast<uint32_t>(getSampleRate()), fQuadMode,
                                  kPreviewDataLen, fPreviewData))
         {
-            fInternalTransportFrame = 0;
+            // "Keep Loop On Track" on: keep the loop region and start the new track from the
+            // left handle (loop start). Off: start from the beginning (the modgui also resets
+            // the handles to full range in that case).
+            if (fKeepLoopOnTrack && ! fHostSync)
+            {
+                const uint64_t total = fReader.getTotalResampledFrames();
+                fInternalTransportFrame = total != 0
+                                        ? static_cast<uint32_t>(fLoopStartValue / 100.f * static_cast<float>(total))
+                                        : 0;
+            }
+            else
+            {
+                fInternalTransportFrame = 0;
+            }
             fDoProcess = true;
             fFilename = filename;
             hostSendPreviewBufferData('f', kPreviewDataLen, fPreviewData);
@@ -784,7 +979,6 @@ void carla_register_native_plugin_audiofile()
                                                       |NATIVE_PLUGIN_HAS_UI
                                                       |NATIVE_PLUGIN_NEEDS_UI_OPEN_SAVE
                                                       |NATIVE_PLUGIN_REQUESTS_IDLE
-                                                      |NATIVE_PLUGIN_USES_CONTROL_VOLTAGE
                                                       |NATIVE_PLUGIN_USES_TIME),
         /* supports  */ NATIVE_PLUGIN_SUPPORTS_NOTHING,
         /* audioIns  */ 0,
@@ -820,7 +1014,7 @@ void carla_register_native_plugin_audiofile()
         AudioFilePlugin::_dispatcher,
         AudioFilePlugin::_render_inline_display,
         /* cvIns  */ 0,
-        /* cvOuts */ 1,
+        /* cvOuts */ 0,
         AudioFilePlugin::_get_buffer_port_name,
         AudioFilePlugin::_get_buffer_port_range,
         /* ui_width  */ 0,

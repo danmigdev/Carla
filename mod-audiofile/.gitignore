@@ -1,0 +1,6 @@
+# These are source assets for this folder, not build artifacts — re-include them even
+# though Carla's top-level .gitignore ignores *.ttl / *.js / *.html globally.
+!*.ttl
+!*.js
+!*.html
+!*.css
