@@ -110,6 +110,12 @@ function (event, funcs)
                 pos = 100.0;
             }
             funcs.set_port_value('seek', pos);
+            // move the play cursor to exactly where the user clicked, immediately -- so it
+            // responds even when stopped, and lands on the click even outside the loop range
+            event.data.lastPosition = pos;
+            if (event.data.layoutCursor) {
+                event.data.layoutCursor(pos);
+            }
         });
         // --- loop-section handles (A/B) drawn over the waveform ---
         var infoBox = event.icon.find('.falktx-audio-file-info');
@@ -262,6 +268,12 @@ function (event, funcs)
                     }
                     funcs.set_port_value('loop_start', 0.0);
                     funcs.set_port_value('loop_end', 100.0);
+                }
+                // on a track change the DSP starts the new track at the left handle, so move
+                // the play cursor there too (works whether stopped or playing)
+                event.data.lastPosition = event.data.loopStart;
+                if (event.data.layoutCursor) {
+                    event.data.layoutCursor(event.data.loopStart);
                 }
             } else {
                 event.data.trackLoadedOnce = true;

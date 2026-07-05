@@ -466,20 +466,11 @@ protected:
             }
             break;
         case kParameterEnabled:
-            if (fEnabled != b)
-            {
-                // when (re)enabling with an A/B loop region set, start from the left handle
-                // (loop start) instead of the file start
-                uint32_t startFrame = 0;
-                if (b && fLoopMode && ! fHostSync)
-                {
-                    const uint64_t total = fReader.getTotalResampledFrames();
-                    if (total != 0)
-                        startFrame = static_cast<uint32_t>(fLoopStartValue / 100.f * static_cast<float>(total));
-                }
-                fInternalTransportFrame = startFrame;
-                fEnabled = b;
-            }
+            // ON/OFF no longer moves the play head: it resumes from the current cursor
+            // position. That cursor is set by seek (click), by dragging a handle, and by a
+            // track change (loadFilename -> left handle), so play starts from the right place
+            // in each case (e.g. click while stopped -> play from the click, not the handle).
+            fEnabled = b;
             break;
         default:
             break;
@@ -544,9 +535,8 @@ protected:
         {
             playing = fEnabled;
             framePos = fInternalTransportFrame;
-
-            if (playing)
-                fInternalTransportFrame += frames;
+            // the actual (loop-wrapped) next position is written back after rendering, so a
+            // seek lands exactly where requested instead of being folded into the loop region
         }
 
         // not playing
@@ -597,22 +587,27 @@ protected:
             uint32_t off = 0, remaining = frames;
             uint64_t fp = framePos;
 
-            // fold the free-running transport head into the loop region
-            if (rEnd > rStart && fp >= rEnd)
-                fp = rStart + (fp - rStart) % (rEnd - rStart);
-
             while (remaining != 0)
             {
                 if (fp >= playEnd)
                 {
-                    // past the playable end and not looping -> play once, silence the rest
-                    carla_zeroFloats(out1 + off, remaining);
-                    carla_zeroFloats(out2 + off, remaining);
-                    break;
+                    if (rEnd > rStart)
+                    {
+                        fp = rStart;   // reached the file end -> resume the loop region
+                    }
+                    else
+                    {
+                        // past the playable end and not looping -> play once, silence the rest
+                        carla_zeroFloats(out1 + off, remaining);
+                        carla_zeroFloats(out2 + off, remaining);
+                        break;
+                    }
                 }
 
-                // never span the loop end (inside region) nor the playable end in one call,
-                // so tickFrames always reads within the pool and never needs to recurse
+                // While at or before the loop end, stop the read at the loop end so it wraps
+                // back into the region. If the head is PAST the loop end (e.g. the user seeked
+                // outside the region) play through to the file end first, then the loop resumes.
+                // Either way a chunk never spans the pool boundary, so tickFrames never recurses.
                 const uint64_t bound = (rEnd > rStart && fp < rEnd) ? rEnd : playEnd;
                 uint32_t chunk = remaining;
                 if (bound - fp < chunk)
@@ -625,9 +620,12 @@ protected:
                 remaining -= chunk;
                 fp += chunk;
 
-                if (rEnd > rStart && fp >= rEnd)
+                if (rEnd > rStart && fp == rEnd)   // reached the loop end from below -> wrap
                     fp = rStart;
             }
+
+            // store the actual (wrapped) play position so the next block and any seek are exact
+            fInternalTransportFrame = static_cast<uint32_t>(fp);
         }
 
         if (needFileRead && ! fPendingFileRead)

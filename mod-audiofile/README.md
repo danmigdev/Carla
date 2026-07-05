@@ -9,7 +9,9 @@ Base commit: `c37d53a4216654118e711fa41e88e7e801d5bd9b`
 
 ## Features added
 
-- **Click-to-seek** — click anywhere on the waveform to jump playback there.
+- **Click-to-seek** — click anywhere on the waveform to jump playback to exactly that
+  point (even outside the loop region), and the cursor moves there immediately, even when
+  stopped. Pressing play resumes from the cursor.
 - **A/B loop section** — drag a left (A) and right (B) handle on the waveform to loop a
   sub-section. Reuses the existing **Loop Mode** switch (Loop Mode on = loop the A–B
   region; default A=0 % / B=100 % = whole file, same as before). Values commit on mouse
@@ -19,8 +21,10 @@ Base commit: `c37d53a4216654118e711fa41e88e7e801d5bd9b`
   - **On** — keep the A/B handles across track changes and start each new track from the
     left handle (A).
   - **Off** (default) — reset the handles to full range on track change and start from 0.
-- Enabling the plugin (ON/OFF) and moving a handle both (re)start playback from the left
-  handle when a loop section is set.
+- Play head / cursor rules: **ON/OFF** resumes from the current cursor; **moving a handle**
+  and a **track change** put the cursor (and playback) at the left handle (A); **clicking**
+  puts it at the click. So a click-while-stopped then play starts from the click, while a
+  track change starts from the left handle.
 
 ## DSP changes (`source/native-plugins/`)
 
@@ -39,6 +43,11 @@ Implementation notes:
   the audio-pool mutex (a deadlock in offline mode). Playback is clamped to what the memory
   pool actually holds (`min(total, numPoolFrames)` for fully-loaded files) so a chunk never
   reads past the pool. `tickFrames()` itself is unchanged from upstream behaviour.
+- When not host-synced, the internal transport is the **actual (loop-wrapped) play
+  position**, written back each block — not a free-running counter folded into the region.
+  So a seek lands exactly where requested; a head past the loop end plays through to the
+  file end and then the loop resumes. `ON/OFF` doesn't move the head (it resumes from the
+  cursor); the head is placed at the left handle by a handle move or a track load.
 - The loop section / seek only apply when **not** host-synced.
 - `keep_loop_on_track` is a GUI-driven setting: the DSP only stores it and uses it in
   `loadFilename()` to decide the start frame; the handle reset is done by the modgui.
