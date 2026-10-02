@@ -225,5 +225,5 @@ The audio files are played back as-is, with resampling only done when needed to 
     """;
 
     lv2:microVersion 22 ;
-    lv2:minorVersion 157 ;
+    lv2:minorVersion 158 ;
     lv2:symbol "audiofile" .

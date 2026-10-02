@@ -6,6 +6,10 @@
         <div class="falktx-audio-file-mode-option" filetype="audiotrack">Tracks</div>
     </div>
     <div class="mod-control-group mod-enumerated-group clearfix">
+        <div class="audio-file-rescan-toolbar">
+            <span class="audio-file-rescan-status" role="status" aria-live="polite"></span>
+            <button class="audio-file-rescan" type="button" title="Refresh available audio files">Rescan folder</button>
+        </div>
         {{#effect.parameters}}
         {{#path}}
         <div class="mod-enumerated" mod-role="input-parameter" mod-parameter-uri="{{uri}}" mod-widget="custom-select-path">

@@ -3,6 +3,159 @@ function (event, funcs)
     /* constants */
     var svg_width = 432;
     var svg_height = 80;
+    var audio_file_uri = 'http://kxstudio.sf.net/carla/file/audio';
+    var audio_file_types = ['audioloop', 'audiorecording', 'audiotrack'];
+
+    function normalize_folder_path(current) {
+        // Some host versions push full paths for every folder, while setValue
+        // stores the first full path followed by relative components.
+        for (var index = 1; index < current.length; ++index) {
+            var parent = current.slice(0, index).join('/') + '/';
+            if (current[index].indexOf(parent) === 0) {
+                current[index] = current[index].slice(parent.length);
+            }
+        }
+    }
+
+    function filter_audio_files(icon) {
+        var filetype = icon.find('.falktx-audio-file-mode-option.selected').attr('filetype');
+        icon.find('[mod-role="input-parameter"][mod-parameter-uri="' + audio_file_uri + '"]').each(function() {
+            var control = $(this);
+            var parameter = control.data('port');
+            var current = control.data('currentPath');
+            // Recent MOD UI also filters by folder. A different tab must not stay
+            // inside a folder belonging to the previous audio category.
+            if (parameter && $.isArray(current) && current.length) {
+                normalize_folder_path(current);
+                var path = current.join('/');
+                var sameType = false;
+                $.each(parameter.files, function(index, file) {
+                    if (file.filetype === filetype && file.basepath &&
+                        (path === file.basepath || path.indexOf(file.basepath + '/') === 0)) {
+                        sameType = true;
+                    }
+                });
+                if (!sameType) {
+                    current.length = 0;
+                    control.customSelectPath('refreshFileList', current);
+                }
+            }
+            control.find('[mod-role="enumeration-option"]').each(function() {
+                var option = $(this);
+                option.toggle(option.attr('mod-filetype') === filetype);
+            });
+        });
+    }
+
+    function refresh_audio_files(event, files) {
+        var selector = '[mod-role="input-parameter"][mod-parameter-uri="' + audio_file_uri + '"]';
+        var controls = event.icon.find(selector);
+        if (event.settings) {
+            controls = controls.add(event.settings.find(selector));
+        }
+        // Newer hosts share parameter metadata with settings/performance widgets.
+        var parameter = controls.first().data('port');
+        if (parameter && parameter.widgets) {
+            $.each(parameter.widgets, function(index, widget) {
+                controls = controls.add(widget);
+            });
+        }
+
+        var directories = [], basepaths = [];
+        $.each(files, function(index, file) {
+            if (!file.basepath) {
+                return;
+            }
+            if ($.inArray(file.basepath, basepaths) < 0) {
+                basepaths.push(file.basepath);
+            }
+            var path = file.fullname;
+            var slash = path.lastIndexOf('/');
+            while (slash > file.basepath.length) {
+                path = path.slice(0, slash);
+                var fullname = 'dir://' + path;
+                var exists = false;
+                $.each(directories, function(index, directory) {
+                    if (directory.fullname === fullname) {
+                        exists = true;
+                    }
+                });
+                if (!exists) {
+                    directories.push({
+                        fullname: fullname, basename: path.slice(path.lastIndexOf('/') + 1),
+                        dirname: path, filetype: 'dir', audioFileType: file.filetype,
+                        basepath: file.basepath
+                    });
+                }
+                slash = path.lastIndexOf('/');
+            }
+        });
+        directories.sort(function(a, b) {
+            return a.fullname < b.fullname ? -1 : a.fullname > b.fullname ? 1 : 0;
+        });
+
+        controls.each(function() {
+            var control = $(this);
+            var port = control.data('port');
+            var current = control.data('currentPath');
+            var folderAware = port && $.isArray(current);
+            var entries = folderAware ? directories.concat(files) : files;
+            var selected = port ? port.value : control.find('.selected').attr('mod-parameter-value');
+            if (folderAware) {
+                normalize_folder_path(current);
+                // Keep the shared arrays alive for any host views rendered later.
+                port.files.length = 0;
+                $.each(entries, function(index, file) { port.files.push(file); });
+                port.basepaths.length = 0;
+                $.each(basepaths, function(index, path) { port.basepaths.push(path); });
+                if (current.length && !directories.some(function(directory) {
+                    return directory.fullname === 'dir://' + current.join('/');
+                })) {
+                    current.length = 0;
+                }
+            }
+            // In the settings view the control IS the list, rather than its parent.
+            var list = control.hasClass('mod-enumerated-list') ? control : control.find('.mod-enumerated-list');
+            var scrollTop = list.scrollTop();
+            list.empty();
+            $.each(entries, function(index, file) {
+                // File names are data: never interpolate them into HTML/selectors.
+                var option = $('<div></div>').attr({
+                    'mod-role': 'enumeration-option', 'mod-filetype': file.audioFileType || file.filetype,
+                    'mod-parameter-value': file.fullname, 'title': file.basename
+                }).text(file.basename).toggleClass('selected', file.fullname === selected);
+                option.on('click.audioFileRescan', function(e) {
+                    e.stopPropagation();
+                    if (control.data('enabled') === false) {
+                        return;
+                    }
+                    if (file.filetype === 'dir') {
+                        if ('dir://' + current.join('/') === file.fullname) {
+                            control.customSelectPath('popDir');
+                        } else {
+                            control.customSelectPath('pushDir', file.fullname);
+                            normalize_folder_path(current);
+                            control.customSelectPath('refreshFileList', current);
+                        }
+                    } else {
+                        // Keep the existing host change handler; reinitializing the
+                        // widget would accumulate handlers after repeated rescans.
+                        control.controlWidget('setValue', file.fullname, false);
+                    }
+                    filter_audio_files(event.icon);
+                });
+                if (file.filetype === 'dir') {
+                    $('<span aria-hidden="true"></span>').text('↳ ').prependTo(option);
+                }
+                list.append(option);
+            });
+            if (folderAware) {
+                control.customSelectPath('refreshFileList', current);
+            }
+            list.scrollTop(scrollTop);
+        });
+        filter_audio_files(event.icon);
+    }
 
     function draw_audio(svg, values, uniqueId) {
         svg.clear();
@@ -75,19 +228,52 @@ function (event, funcs)
         event.data.uniqueId = svgElem.uniqueId().attr('id');
         event.icon.find('.falktx-audio-file-mode-option').click(function() {
             var self = $(this);
-            var filetype = self.attr('filetype');
 
             event.icon.find('.falktx-audio-file-mode-option').removeClass('selected');
             self.addClass('selected')
-
-            event.icon.find('.mod-enumerated-list').children().each(function(index, elem) {
-                var jselem = $(elem);
-                if (jselem.attr('mod-filetype') === filetype) {
-                    jselem.show()
-                } else {
-                    jselem.hide()
+            filter_audio_files(event.icon);
+        });
+        event.data.rescanPending = false;
+        event.icon.find('.audio-file-rescan').on('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (event.data.rescanPending) {
+                return;
+            }
+            event.data.rescanPending = true;
+            var button = $(this);
+            var status = event.icon.find('.audio-file-rescan-status');
+            button.prop('disabled', true);
+            status.text('Scanning…');
+            $.ajax({
+                url: '/files/list',
+                data: { types: audio_file_types.join(',') },
+                dataType: 'json', cache: false, timeout: 15000,
+                success: function(data) {
+                    var valid = data && data.ok !== false && $.isArray(data.files);
+                    if (valid) {
+                        $.each(data.files, function(index, file) {
+                            if (!file || typeof file.fullname !== 'string' || typeof file.basename !== 'string' ||
+                                $.inArray(file.filetype, audio_file_types) < 0) {
+                                valid = false;
+                            }
+                        });
+                    }
+                    if (!valid) {
+                        status.text('Could not rescan. Try again.');
+                        return;
+                    }
+                    refresh_audio_files(event, data.files);
+                    status.text('File list updated.');
+                },
+                error: function() {
+                    status.text('Could not rescan. Try again.');
+                },
+                complete: function() {
+                    event.data.rescanPending = false;
+                    button.prop('disabled', false);
                 }
-            })
+            });
         });
         setTimeout(function() {
             event.icon.find('.falktx-audio-file-mode-option:first-child').click();
@@ -247,6 +433,9 @@ function (event, funcs)
                 }
             }
             return;
+        }
+        if (event.uri === audio_file_uri) {
+            filter_audio_files(event.icon);
         }
         if (event.uri) {
             event.data.lastPosition = null;
