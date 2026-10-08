@@ -1,10 +1,9 @@
 # ![Carla Logo](resources/48x48/carla.png) Carla Plugin Host
 [![build](https://github.com/falkTX/Carla/actions/workflows/build.yml/badge.svg)](https://github.com/falkTX/Carla/actions/workflows/build.yml)
 
-This branch adds A/B loops, seeking, a playback cursor and folder rescanning to
-Audio File for MOD / MODEP. See the
-[Audio File features and installation guide](mod-audiofile/README.md) for MODEP,
-MOD Duo, Duo X and Dwarf instructions and testing status.
+This branch builds **Audio File Plus**, a separate LV2 plugin for MOD / MODEP based on
+Carla's Audio File, with A/B loops, seeking, a playback cursor and folder rescanning. See the
+[Audio File Plus guide](audiofile-plus/README.md) for build, installation and testing status.
 
 What is Carla?
 ---------------

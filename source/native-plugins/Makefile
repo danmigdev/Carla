@@ -63,6 +63,9 @@ OBJS_files = \
 	$(OBJDIR)/audio-file.cpp.o \
 	$(OBJDIR)/midi-file.cpp.o
 
+# always the MOD variant of audiofile, whatever the toolchain defines
+OBJS_audiofile_plus = 	$(OBJDIR)/audio-file.cpp.audiofile-plus.o
+
 OBJS_miditools = \
 	$(OBJDIR)/midi-channel-filter.c.o \
 	$(OBJDIR)/midi-channel-ab.c.o \
@@ -87,6 +90,7 @@ endif
 
 all: $(TARGETS)
 bundles: $(BUNDLES)
+audiofile-plus: $(MODULEDIR)/$(MODULENAME)_audiofile-plus.a
 
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -116,6 +120,12 @@ $(MODULEDIR)/$(MODULENAME)_files.a: $(OBJS_files)
 	$(SILENT)rm -f $@
 	$(SILENT)$(AR) crs $@ $^
 
+$(MODULEDIR)/$(MODULENAME)_audiofile-plus.a: $(OBJS_audiofile_plus)
+	-@mkdir -p $(MODULEDIR)
+	@echo "Creating $(MODULENAME)_audiofile-plus.a"
+	$(SILENT)rm -f $@
+	$(SILENT)$(AR) crs $@ $^
+
 $(MODULEDIR)/$(MODULENAME)_miditools.a: $(OBJS_miditools)
 	-@mkdir -p $(MODULEDIR)
 	@echo "Creating $(MODULENAME)_miditools.a"
@@ -134,8 +144,14 @@ $(OBJDIR)/%.cpp.o: %.cpp
 	@echo "Compiling $<"
 	$(SILENT)$(CXX) $< $(BUILD_CXX_FLAGS) -c -o $@
 
+$(OBJDIR)/audio-file.cpp.audiofile-plus.o: audio-file.cpp
+	-@mkdir -p $(OBJDIR)
+	@echo "Compiling $< (audiofile-plus)"
+	$(SILENT)$(CXX) $< $(BUILD_CXX_FLAGS) -D__MOD_DEVICES__ -c -o $@
+
 # ---------------------------------------------------------------------------------------------------------------------
 
 -include $(OBJS:%.o=%.d)
+-include $(OBJS_audiofile_plus:%.o=%.d)
 
 # ---------------------------------------------------------------------------------------------------------------------

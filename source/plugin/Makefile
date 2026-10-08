@@ -261,6 +261,8 @@ bundles: \
 	$(BINDIR)/carla-miditools.lv2/manifest.ttl \
 	$(BINDIR)/carla-miditools.lv2/carla$(LIB_EXT)
 
+audiofile-plus: 	$(BINDIR)/audiofile-plus.lv2/manifest.ttl 	$(BINDIR)/audiofile-plus.lv2/audiofile-plus$(LIB_EXT)
+
 BUNDLE_LIBS += $(MODULEDIR)/water.files.a
 BUNDLE_LIBS += $(WATER_LIBS)
 
@@ -277,6 +279,7 @@ clean:
 	rm -f $(BINDIR)/carla.lv2/*.*
 	rm -f $(BINDIR)/carla-lv2-export$(APP_EXT)
 	rm -rf $(BINDIR)/carla-*.lv2
+	rm -rf $(BINDIR)/audiofile-plus.lv2
 
 debug:
 	$(MAKE) DEBUG=true
@@ -332,6 +335,17 @@ $(BINDIR)/carla-miditools.lv2/carla$(LIB_EXT): $(OBJDIR)/carla-lv2-bundles.cpp.m
 	-@mkdir -p $(BINDIR)/carla-miditools.lv2
 	@echo "Linking carla-miditools.lv2/carla$(LIB_EXT)"
 	$(SILENT)$(CXX) $^ $(BUILD_CXX_FLAGS) $(SHARED) $(SYMBOLS_LV2) $(BUNDLE_LIBS) $(LINK_FLAGS) -o $@
+
+AUDIOFILE_PLUS_DATA = $(CWD)/../audiofile-plus/bundle
+
+$(BINDIR)/audiofile-plus.lv2/manifest.ttl: $(wildcard $(AUDIOFILE_PLUS_DATA)/*.ttl $(AUDIOFILE_PLUS_DATA)/modgui/*)
+	-@mkdir -p $(BINDIR)/audiofile-plus.lv2
+	$(SILENT)cp -rv $(AUDIOFILE_PLUS_DATA)/. $(BINDIR)/audiofile-plus.lv2/
+
+$(BINDIR)/audiofile-plus.lv2/audiofile-plus$(LIB_EXT): $(OBJDIR)/carla-lv2-bundles.cpp.audiofile-plus.o $(MODULEDIR)/native-plugins_audiofile-plus.a
+	-@mkdir -p $(BINDIR)/audiofile-plus.lv2
+	@echo "Linking audiofile-plus.lv2/audiofile-plus$(LIB_EXT)"
+	$(SILENT)$(CXX) $^ $(BUILD_CXX_FLAGS) $(SHARED) $(SYMBOLS_LV2) $(BUNDLE_FILES_LIBS) $(LINK_FLAGS) -o $@
 
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -441,6 +455,11 @@ $(OBJDIR)/carla-lv2-bundles.cpp.miditools.o: carla-lv2-bundles.cpp
 	@echo "Compiling $< (miditools)"
 	$(SILENT)$(CXX) $< $(BUILD_CXX_FLAGS) -DCARLA_BUNDLE_TYPE=3 -c -o $@
 
+$(OBJDIR)/carla-lv2-bundles.cpp.audiofile-plus.o: carla-lv2-bundles.cpp
+	-@mkdir -p $(OBJDIR)
+	@echo "Compiling $< (audiofile-plus)"
+	$(SILENT)$(CXX) $< $(BUILD_CXX_FLAGS) -DCARLA_BUNDLE_TYPE=4 -c -o $@
+
 # ---------------------------------------------------------------------------------------------------------------------
 
 $(OBJDIR)/carla-vst.cpp.rack-fx.o: carla-vst.cpp
@@ -537,6 +556,7 @@ $(OBJDIR)/carla-lv2-export.cpp.o: carla-lv2-export.cpp
 -include $(OBJDIR)/carla-lv2-bundles.cpp.audiogain.d
 -include $(OBJDIR)/carla-lv2-bundles.cpp.files.d
 -include $(OBJDIR)/carla-lv2-bundles.cpp.miditools.d
+-include $(OBJDIR)/carla-lv2-bundles.cpp.audiofile-plus.d
 -include $(OBJDIR)/carla-lv2-export.cpp.d
 -include $(OBJDIR)/carla-vst.cpp.patchbay-fx.d
 -include $(OBJDIR)/carla-vst.cpp.patchbay-syn.d

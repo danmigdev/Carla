@@ -1,0 +1,28 @@
+@prefix atom: <http://lv2plug.in/ns/ext/atom#> .
+@prefix lv2:  <http://lv2plug.in/ns/lv2core#> .
+@prefix mod:  <http://moddevices.com/ns/mod#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<urn:danmigdev:audiofile-plus>
+    a lv2:Plugin ;
+    lv2:binary <audiofile-plus.so> ;
+    rdfs:seeAlso <audiofile-plus.ttl> , <modguis.ttl> .
+
+# File and preview properties keep Carla's URIs: the plugin code reads and writes them.
+# The same definitions are in carla-files.lv2, so both bundles can be installed together.
+
+<http://kxstudio.sf.net/carla/file>
+    a lv2:Parameter ;
+    rdfs:label "file" ;
+    rdfs:range atom:Path .
+
+<http://kxstudio.sf.net/carla/file/audio>
+    a lv2:Parameter ;
+    mod:fileTypes "audioloop,audiorecording,audiotrack" ;
+    rdfs:label "audio file" ;
+    rdfs:range atom:Path .
+
+<http://kxstudio.sf.net/carla/preview>
+    a lv2:Parameter ;
+    rdfs:label "preview" ;
+    rdfs:range atom:Vector .

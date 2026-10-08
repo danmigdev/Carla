@@ -19,6 +19,7 @@
 #include "CarlaString.hpp"
 
 #include "audio-base.hpp"
+#include "audio-file-peaks.hpp"
 
 #include <cmath>
 
@@ -106,9 +107,7 @@ public:
         kParameterHostSync,
         kParameterVolume,
         kParameterEnabled,
-       #ifndef __MOD_DEVICES__
         kParameterQuadChannels,
-       #endif
         kParameterInfoChannels,
         kParameterInfoBitRate,
         kParameterInfoBitDepth,
@@ -120,6 +119,8 @@ public:
         kParameterLoopStart,
         kParameterLoopEnd,
         kParameterKeepLoopOnTrack,
+        kParameterViewStart,
+        kParameterViewEnd,
         kParameterCount
     };
 
@@ -131,6 +132,12 @@ public:
         : NativePluginClass(host),
        #endif
           fVolumeFilter(getSampleRate()) {}
+
+    ~AudioFilePlugin() override
+    {
+        // the waveform scan thread calls back into this object
+        fPeaks.stop();
+    }
 
 protected:
     // ----------------------------------------------------------------------------------------------------------------
@@ -199,7 +206,6 @@ protected:
             param.ranges.max = 1.0f;
             param.designation = NATIVE_PARAMETER_DESIGNATION_ENABLED;
             break;
-       #ifndef __MOD_DEVICES__
         case kParameterQuadChannels:
             param.name  = "Quad Channels";
             param.hints = static_cast<NativeParameterHints>(NATIVE_PARAMETER_IS_AUTOMATABLE|
@@ -219,7 +225,6 @@ protected:
                 param.scalePoints      = scalePoints;
             }
             break;
-       #endif
         case kParameterSeek:
             param.name  = "Seek";
             param.hints = static_cast<NativeParameterHints>(NATIVE_PARAMETER_IS_AUTOMATABLE|
@@ -255,6 +260,16 @@ protected:
             param.ranges.def = 0.0f;
             param.ranges.min = 0.0f;
             param.ranges.max = 1.0f;
+            break;
+        case kParameterViewStart:
+        case kParameterViewEnd:
+            // visible part of the waveform, set by the modgui when zooming
+            param.name  = index == kParameterViewStart ? "View Start" : "View End";
+            param.hints = NATIVE_PARAMETER_IS_ENABLED;
+            param.ranges.def = index == kParameterViewStart ? 0.0f : 100.0f;
+            param.ranges.min = 0.0f;
+            param.ranges.max = 100.0f;
+            param.unit = "%";
             break;
         case kParameterInfoChannels:
             param.name  = "Num Channels";
@@ -343,10 +358,8 @@ protected:
             return fHostSync ? 1.f : 0.f;
         case kParameterEnabled:
             return fEnabled ? 1.f : 0.f;
-       #ifndef __MOD_DEVICES__
         case kParameterQuadChannels:
             return fQuadMode;
-       #endif
         case kParameterSeek:
             return fSeekValue;
         case kParameterLoopStart:
@@ -355,6 +368,10 @@ protected:
             return fLoopEndValue;
         case kParameterKeepLoopOnTrack:
             return fKeepLoopOnTrack ? 1.f : 0.f;
+        case kParameterViewStart:
+            return fViewStart;
+        case kParameterViewEnd:
+            return fViewEnd;
         case kParameterVolume:
             return fVolume * 100.f;
         case kParameterInfoPosition:
@@ -409,6 +426,20 @@ protected:
             return;
         }
 
+        if (index == kParameterViewStart || index == kParameterViewEnd)
+        {
+            const float v = carla_fixedValue(0.f, 100.f, value);
+            if (index == kParameterViewStart)
+                fViewStart = v;
+            else
+                fViewEnd = v;
+
+            // the new view is computed in idle
+            fWaveformPending = true;
+            hostRequestIdle();
+            return;
+        }
+
         if (index == kParameterLoopStart || index == kParameterLoopEnd)
         {
             float v = value;
@@ -432,7 +463,6 @@ protected:
             return;
         }
 
-       #ifndef __MOD_DEVICES__
         if (index == kParameterQuadChannels)
         {
             const int ivalue = static_cast<int>(value + 0.5f);
@@ -444,7 +474,6 @@ protected:
             hostRequestIdle();
             return;
         }
-       #endif
 
         const bool b = value > 0.5f;
 
@@ -511,12 +540,14 @@ protected:
     {
         float* const out1 = outBuffer[0];
         float* const out2 = outBuffer[1];
+        float* const playCV = outBuffer[2];
 
         if (! fDoProcess)
         {
             // carla_stderr("P: no process");
             carla_zeroFloats(out1, frames);
             carla_zeroFloats(out2, frames);
+            carla_zeroFloats(playCV, frames);
             fLastPosition = 0.f;
             fReadableBufferFill = 0.f;
             return;
@@ -544,6 +575,7 @@ protected:
         {
             carla_zeroFloats(out1, frames);
             carla_zeroFloats(out2, frames);
+            carla_zeroFloats(playCV, frames);
             return;
         }
 
@@ -600,6 +632,7 @@ protected:
                         // past the playable end and not looping -> play once, silence the rest
                         carla_zeroFloats(out1 + off, remaining);
                         carla_zeroFloats(out2 + off, remaining);
+                        carla_zeroFloats(playCV + off, remaining);
                         break;
                     }
                 }
@@ -709,6 +742,9 @@ protected:
             fPendingFileRead = false;
             fReader.readPoll();
         }
+
+        if (fWaveformPending.exchange(false))
+            sendWaveform();
     }
 
     void sampleRateChanged(const double sampleRate) override
@@ -863,6 +899,22 @@ private:
 
     float fPreviewData[108] = {};
 
+    // Waveform for the modgui, sent on the preview property as
+    // [format 2, file generation, view start %, view end %, scan progress 0..1, min0, max0, min1, max1, ...]
+    static constexpr uint32_t kWaveformHeader = 5;
+    static constexpr uint32_t kWaveformSize = kWaveformHeader + AudioFilePeaks::kViewPoints * 2;
+    // the host sends a buffer after we pass it, so rotate a few to never overwrite one in flight
+    static constexpr uint32_t kWaveformBuffers = 3;
+
+    AudioFilePeaks fPeaks;
+    CarlaString fWaveformFilename;
+    uint32_t fFileGeneration = 0;
+    float fViewStart = 0.f;
+    float fViewEnd = 100.f;
+    std::atomic<bool> fWaveformPending { false };
+    float fWaveform[kWaveformBuffers][kWaveformSize] = {};
+    uint32_t fWaveformIndex = 0;
+
    #ifndef __MOD_DEVICES__
     NativeMidiPrograms fPrograms;
 
@@ -891,6 +943,28 @@ private:
 
     VolumeFilter fVolumeFilter;
 
+    static void waveformNotify(void* const ptr)
+    {
+        AudioFilePlugin* const self = static_cast<AudioFilePlugin*>(ptr);
+        self->fWaveformPending = true;
+        self->hostRequestIdle();
+    }
+
+    void sendWaveform()
+    {
+        const float viewStart = fViewStart;
+        const float viewEnd = fViewEnd;
+        float* const data = fWaveform[fWaveformIndex];
+        fWaveformIndex = (fWaveformIndex + 1) % kWaveformBuffers;
+
+        data[0] = 2.f;
+        data[1] = static_cast<float>(fFileGeneration);
+        data[2] = viewStart;
+        data[3] = viewEnd;
+        data[4] = fPeaks.computeView(viewStart, viewEnd, data + kWaveformHeader);
+        hostSendPreviewBufferData('f', kWaveformSize, data);
+    }
+
     void loadFilename(const char* const filename)
     {
         CARLA_ASSERT(filename != nullptr);
@@ -898,6 +972,7 @@ private:
 
         fDoProcess = false;
         fReader.destroy();
+        fPeaks.stop();
         fFilename.clear();
 
         if (filename == nullptr || *filename == '\0')
@@ -924,7 +999,17 @@ private:
             }
             fDoProcess = true;
             fFilename = filename;
-            hostSendPreviewBufferData('f', kPreviewDataLen, fPreviewData);
+
+            // a new file (not a reload of the same one, e.g. for quad mode) lets the modgui
+            // tell a track change from a waveform update
+            if (fWaveformFilename != filename)
+            {
+                fWaveformFilename = filename;
+                ++fFileGeneration;
+            }
+
+            fPeaks.start(filename, fQuadMode, waveformNotify, this);
+            sendWaveform();
         }
     }
 
@@ -977,6 +1062,7 @@ void carla_register_native_plugin_audiofile()
                                                       |NATIVE_PLUGIN_HAS_UI
                                                       |NATIVE_PLUGIN_NEEDS_UI_OPEN_SAVE
                                                       |NATIVE_PLUGIN_REQUESTS_IDLE
+                                                      |NATIVE_PLUGIN_USES_CONTROL_VOLTAGE
                                                       |NATIVE_PLUGIN_USES_TIME),
         /* supports  */ NATIVE_PLUGIN_SUPPORTS_NOTHING,
         /* audioIns  */ 0,
@@ -1012,7 +1098,7 @@ void carla_register_native_plugin_audiofile()
         AudioFilePlugin::_dispatcher,
         AudioFilePlugin::_render_inline_display,
         /* cvIns  */ 0,
-        /* cvOuts */ 0,
+        /* cvOuts */ 1,
         AudioFilePlugin::_get_buffer_port_name,
         AudioFilePlugin::_get_buffer_port_range,
         /* ui_width  */ 0,

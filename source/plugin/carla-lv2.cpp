@@ -1257,8 +1257,14 @@ static LV2_Handle lv2_instantiate(const LV2_Descriptor* lv2Descriptor, double sa
     const NativePluginDescriptor* pluginDesc  = nullptr;
     const char*                   pluginLabel = nullptr;
 
+#ifdef CARLA_LV2_PLUGIN_URI
+    // single-plugin bundle published under its own URI
+    if (std::strcmp(lv2Descriptor->URI, CARLA_LV2_PLUGIN_URI) == 0)
+        pluginLabel = CARLA_LV2_PLUGIN_LABEL;
+#else
     if (std::strncmp(lv2Descriptor->URI, "http://kxstudio.sf.net/carla/plugins/", 37) == 0)
         pluginLabel = lv2Descriptor->URI+37;
+#endif
 
     if (pluginLabel == nullptr)
     {
@@ -1526,8 +1532,13 @@ const LV2_Descriptor* lv2_descriptor(uint32_t index)
     CARLA_SAFE_ASSERT_RETURN(pluginDesc != nullptr, nullptr);
 
     CarlaString tmpURI;
+#ifdef CARLA_LV2_PLUGIN_URI
+    CARLA_SAFE_ASSERT_RETURN(std::strcmp(pluginDesc->label, CARLA_LV2_PLUGIN_LABEL) == 0, nullptr);
+    tmpURI  = CARLA_LV2_PLUGIN_URI;
+#else
     tmpURI  = "http://kxstudio.sf.net/carla/plugins/";
     tmpURI += pluginDesc->label;
+#endif
 
     carla_debug("lv2_descriptor(%i) - not found, allocating new with uri \"%s\"", index, (const char*)tmpURI);
 

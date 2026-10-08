@@ -19,6 +19,12 @@
 # error CARLA_BUNDLE_TYPE undefined
 #endif
 
+#if CARLA_BUNDLE_TYPE == 4
+// Audio File Plus: the audiofile plugin as its own bundle, under its own URI
+# define CARLA_LV2_PLUGIN_URI   "urn:danmigdev:audiofile-plus"
+# define CARLA_LV2_PLUGIN_LABEL "audiofile"
+#endif
+
 // --------------------------------------------------------------------------------------------------------------------
 
 #include "carla-lv2.cpp"
@@ -110,6 +116,8 @@ static void carla_register_bundled_native_plugins(void)
     carla_register_native_plugin_midijoin();
     carla_register_native_plugin_midisplit();
     carla_register_native_plugin_miditranspose();
+#elif CARLA_BUNDLE_TYPE == 4
+    carla_register_native_plugin_audiofile();
 #endif
 }
 

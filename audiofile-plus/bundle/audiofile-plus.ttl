@@ -1,0 +1,291 @@
+@prefix atom:  <http://lv2plug.in/ns/ext/atom#> .
+@prefix doap:  <http://usefulinc.com/ns/doap#> .
+@prefix foaf:  <http://xmlns.com/foaf/0.1/> .
+@prefix lv2:   <http://lv2plug.in/ns/lv2core#> .
+@prefix mod:   <http://moddevices.com/ns/mod#> .
+@prefix opts:  <http://lv2plug.in/ns/ext/options#> .
+@prefix patch: <http://lv2plug.in/ns/ext/patch#> .
+@prefix pprop: <http://lv2plug.in/ns/ext/port-props#> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix unit:  <http://lv2plug.in/ns/extensions/units#> .
+
+<urn:danmigdev:audiofile-plus>
+    a lv2:UtilityPlugin, lv2:Plugin ;
+
+    lv2:optionalFeature <http://lv2plug.in/ns/lv2core#hardRTCapable> ;
+    lv2:optionalFeature <http://lv2plug.in/ns/ext/state#threadSafeRestore> ;
+
+    lv2:requiredFeature <http://lv2plug.in/ns/ext/buf-size#boundedBlockLength> ,
+                        <http://lv2plug.in/ns/ext/worker#schedule> ,
+                        <http://lv2plug.in/ns/ext/options#options> ,
+                        <http://lv2plug.in/ns/ext/urid#map> ;
+
+    lv2:extensionData <http://lv2plug.in/ns/ext/options#interface> ;
+    lv2:extensionData <http://lv2plug.in/ns/ext/state#interface> ;
+    lv2:extensionData <http://kxstudio.sf.net/ns/lv2ext/programs#Interface> ;
+    lv2:extensionData <http://lv2plug.in/ns/ext/worker#interface> ;
+
+    opts:supportedOption <http://lv2plug.in/ns/ext/buf-size#nominalBlockLength> ,
+                         <http://lv2plug.in/ns/ext/buf-size#maxBlockLength> ,
+                         <http://lv2plug.in/ns/ext/parameters#sampleRate> ;
+
+    lv2:port [
+        a lv2:InputPort, atom:AtomPort ;
+        atom:bufferType atom:Sequence ;
+        atom:supports <http://lv2plug.in/ns/ext/time#Position> ;
+        atom:supports <http://lv2plug.in/ns/ext/patch#Message> ;
+        lv2:designation lv2:control ;
+        lv2:index 0 ;
+        lv2:symbol "lv2_events_in" ;
+        lv2:name "Events Input" ;
+    ] ;
+
+    patch:writable <http://kxstudio.sf.net/carla/file/audio> ;
+    patch:readable <http://kxstudio.sf.net/carla/preview> ;
+
+    lv2:port [
+        a lv2:OutputPort, atom:AtomPort ;
+        atom:bufferType atom:Sequence ;
+        atom:supports <http://lv2plug.in/ns/ext/patch#Message> ;
+        lv2:index 1 ;
+        lv2:symbol "lv2_events_out" ;
+        lv2:name "Events Output" ;
+    ] ;
+
+    lv2:port [
+        a lv2:InputPort, lv2:ControlPort ;
+        lv2:index 2 ;
+        lv2:symbol "lv2_freewheel" ;
+        lv2:name "Freewheel" ;
+        lv2:default 0.0 ;
+        lv2:minimum 0.0 ;
+        lv2:maximum 1.0 ;
+        lv2:designation <http://lv2plug.in/ns/lv2core#freeWheeling> ;
+        lv2:portProperty lv2:toggled, <http://lv2plug.in/ns/ext/port-props#notOnGUI> ;
+    ] ;
+
+    lv2:port [
+        a lv2:OutputPort, lv2:AudioPort ;
+        lv2:index 3 ;
+        lv2:symbol "lv2_audio_out_1" ;
+        lv2:name "Audio Output 1" ;
+    ] , [
+        a lv2:OutputPort, lv2:AudioPort ;
+        lv2:index 4 ;
+        lv2:symbol "lv2_audio_out_2" ;
+        lv2:name "Audio Output 2" ;
+    ] , [
+        a lv2:OutputPort, lv2:CVPort, mod:CVPort ;
+        lv2:index 5 ;
+        lv2:symbol "lv2_cv_out_1" ;
+        lv2:name "Play status" ;
+        lv2:default 0 ;
+        lv2:minimum 0 ;
+        lv2:maximum 10 ;
+    ] ;
+
+    lv2:port [
+        a lv2:InputPort, lv2:ControlPort ;
+        lv2:index 6 ;
+        lv2:symbol "loop_mode" ;
+        lv2:name "Loop Mode" ;
+        lv2:default 1 ;
+        lv2:minimum 0 ;
+        lv2:maximum 1 ;
+        lv2:portProperty lv2:integer, lv2:toggled ;
+    ] , [
+        a lv2:InputPort, lv2:ControlPort ;
+        lv2:index 7 ;
+        lv2:symbol "host_sync" ;
+        lv2:name "Host Sync" ;
+        lv2:default 0 ;
+        lv2:minimum 0 ;
+        lv2:maximum 1 ;
+        lv2:portProperty lv2:integer, lv2:toggled ;
+    ] , [
+        a lv2:InputPort, lv2:ControlPort ;
+        lv2:index 8 ;
+        lv2:symbol "volume" ;
+        lv2:name "Volume" ;
+        lv2:default 100.0 ;
+        lv2:minimum 0.0 ;
+        lv2:maximum 127.0 ;
+        unit:unit unit:pc ;
+    ] , [
+        a lv2:InputPort, lv2:ControlPort ;
+        lv2:index 9 ;
+        lv2:symbol "enabled" ;
+        lv2:name "Enabled" ;
+        lv2:default 1 ;
+        lv2:minimum 0 ;
+        lv2:maximum 1 ;
+        lv2:portProperty lv2:integer, lv2:toggled ;
+        lv2:designation lv2:enabled ;
+    ] , [
+        a lv2:InputPort, lv2:ControlPort ;
+        lv2:index 10 ;
+        lv2:symbol "quad_channels" ;
+        lv2:name "Quad Channels" ;
+        lv2:default 0 ;
+        lv2:minimum 0 ;
+        lv2:maximum 2 ;
+        lv2:portProperty lv2:integer ;
+        lv2:portProperty lv2:enumeration ;
+        lv2:scalePoint [ rdfs:label "Channels 1 + 2" ;
+                         rdf:value  0 ] ,
+                       [ rdfs:label "Channels 3 + 4" ;
+                         rdf:value  1 ] ,
+                       [ rdfs:label "Channels 1&2 + 3&4" ;
+                         rdf:value  2 ] ;
+    ] , [
+        a lv2:OutputPort, lv2:ControlPort ;
+        lv2:index 11 ;
+        lv2:symbol "num_channels" ;
+        lv2:name "Num Channels" ;
+        lv2:minimum 0 ;
+        lv2:maximum 2 ;
+        lv2:portProperty lv2:integer ;
+    ] , [
+        a lv2:OutputPort, lv2:ControlPort ;
+        lv2:index 12 ;
+        lv2:symbol "bit_rate" ;
+        lv2:name "Bit Rate" ;
+        lv2:minimum -1 ;
+        lv2:maximum 49152000 ;
+        lv2:portProperty lv2:integer ;
+    ] , [
+        a lv2:OutputPort, lv2:ControlPort ;
+        lv2:index 13 ;
+        lv2:symbol "bit_depth" ;
+        lv2:name "Bit Depth" ;
+        lv2:minimum 0 ;
+        lv2:maximum 64 ;
+        lv2:portProperty lv2:integer ;
+    ] , [
+        a lv2:OutputPort, lv2:ControlPort ;
+        lv2:index 14 ;
+        lv2:symbol "sample_rate" ;
+        lv2:name "Sample Rate" ;
+        lv2:minimum 0 ;
+        lv2:maximum 384000 ;
+        lv2:portProperty lv2:integer ;
+    ] , [
+        a lv2:OutputPort, lv2:ControlPort ;
+        lv2:index 15 ;
+        lv2:symbol "length" ;
+        lv2:name "Length" ;
+        lv2:minimum 0.0 ;
+        lv2:maximum 9223372036854775808.0 ;
+        unit:unit unit:s ;
+    ] , [
+        a lv2:OutputPort, lv2:ControlPort ;
+        lv2:index 16 ;
+        lv2:symbol "position" ;
+        lv2:name "Position" ;
+        lv2:minimum 0.0 ;
+        lv2:maximum 100.0 ;
+        unit:unit unit:pc ;
+    ] , [
+        a lv2:OutputPort, lv2:ControlPort ;
+        lv2:index 17 ;
+        lv2:symbol "pool_fill" ;
+        lv2:name "Pool Fill" ;
+        lv2:minimum 0.0 ;
+        lv2:maximum 100.0 ;
+        unit:unit unit:pc ;
+    ] , [
+        a lv2:InputPort, lv2:ControlPort ;
+        lv2:index 18 ;
+        lv2:symbol "seek" ;
+        lv2:name "Seek" ;
+        lv2:default 0.0 ;
+        lv2:minimum 0.0 ;
+        lv2:maximum 100.0 ;
+        unit:unit unit:pc ;
+    ] , [
+        a lv2:InputPort, lv2:ControlPort ;
+        lv2:index 19 ;
+        lv2:symbol "loop_start" ;
+        lv2:name "Loop Start" ;
+        lv2:default 0.0 ;
+        lv2:minimum 0.0 ;
+        lv2:maximum 100.0 ;
+        unit:unit unit:pc ;
+    ] , [
+        a lv2:InputPort, lv2:ControlPort ;
+        lv2:index 20 ;
+        lv2:symbol "loop_end" ;
+        lv2:name "Loop End" ;
+        lv2:default 100.0 ;
+        lv2:minimum 0.0 ;
+        lv2:maximum 100.0 ;
+        unit:unit unit:pc ;
+    ] , [
+        a lv2:InputPort, lv2:ControlPort ;
+        lv2:index 21 ;
+        lv2:symbol "keep_loop_on_track" ;
+        lv2:name "Keep Loop On Track" ;
+        lv2:default 0 ;
+        lv2:minimum 0 ;
+        lv2:maximum 1 ;
+        lv2:portProperty lv2:integer, lv2:toggled ;
+    ] , [
+        a lv2:InputPort, lv2:ControlPort ;
+        lv2:index 22 ;
+        lv2:symbol "view_start" ;
+        lv2:name "View Start" ;
+        lv2:default 0.0 ;
+        lv2:minimum 0.0 ;
+        lv2:maximum 100.0 ;
+        unit:unit unit:pc ;
+        lv2:portProperty pprop:notOnGUI ;
+    ] , [
+        a lv2:InputPort, lv2:ControlPort ;
+        lv2:index 23 ;
+        lv2:symbol "view_end" ;
+        lv2:name "View End" ;
+        lv2:default 100.0 ;
+        lv2:minimum 0.0 ;
+        lv2:maximum 100.0 ;
+        unit:unit unit:pc ;
+        lv2:portProperty pprop:notOnGUI ;
+    ] ;
+
+    doap:license <http://opensource.org/licenses/GPL-2.0> ;
+    doap:name "Audio File Plus" ;
+    doap:developer [ foaf:name "falkTX" ] , [ foaf:name "danmigdev" ] ;
+    doap:maintainer [ foaf:name "danmigdev" ] ;
+
+    rdfs:comment """
+An audio file player with click-to-seek, an A/B loop section and a play cursor on the waveform.
+Based on the Audio File plugin by falkTX, and installs next to it.
+
+Upload files in the MOD file manager section (loops, recordings or tracks) and load up the plugin.
+Transport is rolling as long as the plugin is enabled and a file is selected.
+Use "Rescan folder" to list files recorded or uploaded after the plugin was loaded.
+
+The waveform shows the real peaks of the file. Scroll the mouse wheel over it to zoom in,
+down to single samples; Shift + wheel (or scrolling sideways) moves along the file.
+Click the waveform to jump to that point, also while stopped: playback then starts from there.
+With Loop Mode on, drag the A and B handles to repeat a section of the file. Loop Start, Loop End
+and Seek are also available as parameters (0 to 100% of the file), for knobs and CV.
+Moving a handle restarts playback from A. "Keep Loop On Track" keeps the A/B section,
+as percentages, when switching files.
+Seek and A/B looping apply with Host Sync off. With Host Sync on, playback follows the host
+transport in frame-perfect sync, useful if you need a few loops playing together.
+
+Files are streamed from disk if longer than 30 seconds in length, otherwise loaded entirely on RAM.
+
+This plugin supports mono, stereo and quad files.
+For quad files use the "Quad Channels" parameter to select which 2 outputs to use.
+
+A CV output port reports the current play status as a CV signal, 0 when paused and 10v when playing.
+
+Audio is played back as-is: it does not resample or pitch-shift to fit the host BPM,
+resampling is only done when needed to match the host sample rate.
+    """;
+
+    lv2:microVersion 2 ;
+    lv2:minorVersion 4 ;
+    lv2:symbol "audiofile_plus" .

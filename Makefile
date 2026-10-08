@@ -198,6 +198,14 @@ lv2-bundles-dep: $(MODULEDIR)/audio_decoder.a $(MODULEDIR)/water.a $(MODULEDIR)/
 lv2-bundles: lv2-bundles-dep
 	@$(MAKE) -C source/plugin bundles
 
+# Audio File Plus: the audiofile plugin as its own LV2 bundle (data files in audiofile-plus/bundle)
+# phony because the audiofile-plus/ folder has the same name
+audiofile-plus: $(MODULEDIR)/audio_decoder.a $(MODULEDIR)/water.a $(MODULEDIR)/zita-resampler.a
+	@$(MAKE) -C source/native-plugins audiofile-plus
+	@$(MAKE) -C source/plugin audiofile-plus
+
+.PHONY: audiofile-plus
+
 plugin: backend bridges-plugin bridges-ui discovery
 	@$(MAKE) -C source/plugin
 
