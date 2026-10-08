@@ -141,9 +141,9 @@ restart loop.
 ## Install on MOD Duo, Duo X or Dwarf
 
 These builds have not been tested on hardware yet. The recipe `audiofile-plus.mk` is in
-[mod-plugin-builder](https://github.com/mod-audio/mod-plugin-builder) format. Before using
-it, set `AUDIOFILE_PLUS_VERSION` to a full commit SHA of this branch that is pushed to
-GitHub: builders download that commit and never see local changes.
+[mod-plugin-builder](https://github.com/mod-audio/mod-plugin-builder) format and builds the
+commit set in `AUDIOFILE_PLUS_VERSION`: builders download that commit from GitHub and never
+see local changes. For a new release, push the changes first, then update the SHA.
 
 **MOD Cloud Builder** (needs a unit on MOD OS 1.13 or later, connected over USB):
 open [builder.mod.audio](https://builder.mod.audio), Buildroot section, upload
