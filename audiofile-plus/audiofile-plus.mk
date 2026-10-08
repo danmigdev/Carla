@@ -5,8 +5,9 @@
 ######################################
 
 # Recipe for mod-plugin-builder (plugins/package/audiofile-plus/audiofile-plus.mk), the MOD Cloud
-# Builder (Buildroot section) and patchstorage-lv2-builder. Set the version to a pushed commit.
-AUDIOFILE_PLUS_VERSION = REPLACE_WITH_PUBLISHED_COMMIT_SHA
+# Builder (Buildroot section) and patchstorage-lv2-builder. The version is a pushed commit of the
+# danmigdev/Carla branch audio-file-loop-seek (Audio File Plus 4.2).
+AUDIOFILE_PLUS_VERSION = 3b676a6455d381d50e9b66682845594df097f505
 AUDIOFILE_PLUS_SITE = $(call github,danmigdev,Carla,$(AUDIOFILE_PLUS_VERSION))
 AUDIOFILE_PLUS_DEPENDENCIES = libsndfile
 AUDIOFILE_PLUS_BUNDLES = audiofile-plus.lv2
